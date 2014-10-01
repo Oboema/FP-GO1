@@ -14,6 +14,8 @@ data TokenType	=Plus
 				|For
 				|Number
 				|Var
+				|POpen
+				|PClose
 				|Nop
 				
 
