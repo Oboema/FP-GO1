@@ -16,6 +16,8 @@ data TokenType	=Plus
 				|Var
 				|POpen
 				|PClose
+				|BOpen
+				|BClose
 				|Nop
 				
 
