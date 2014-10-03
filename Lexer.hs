@@ -48,15 +48,14 @@ tokenize (x:xs)	|isDigit x	=(Number, num)			:tokenize rnum
 				|x=='('		=(POpen, [x])			:tokenize xs
 				|x==')'		=(PClose, [x])			:tokenize xs
 				|x=='{'		=(BOpen, [x])			:tokenize xs
-				|x=='{'		=(BClose, [x])			:tokenize xs
+				|x=='}'		=(BClose, [x])			:tokenize xs
 				|x=='+'		=(Plus, [x])			:tokenize xs
 				|x=='-'		=(Min, [x])				:tokenize xs
 				|x=='*'		=(Mul, [x])				:tokenize xs
 				|x=='/'		=(Div, [x])				:tokenize xs
-				|x==';'		=(Statement, [x])		:tokenize xs
-				|x==' '		=tokenize xs
-				|x=='\n'	=tokenize xs
-				|otherwise	=error "token error: no matching token left"
+				|x==';'		=(Semicolon, [x])		:tokenize xs
+				|isSpace x	=tokenize xs
+				|otherwise	=error ("lexer error: no matching token left for: "++(x:xs))
 				where
 					(num,rnum)=span isDigit (x:xs)
 					(var,rvar)=span isLetter (x:xs)
