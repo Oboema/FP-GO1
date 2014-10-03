@@ -5,8 +5,8 @@ data TokenType	=Plus
 				|Mul
 				|Div
 				|OpBool
+				|Not
 				|Statement
-				|DefVar
 				|Assignment
 				|If
 				|Then
@@ -15,25 +15,31 @@ data TokenType	=Plus
 				|For
 				|Number
 				|Var
-				|Const
+				|ConstVar
+				|VarVar
 				|POpen
 				|PClose
 				|BOpen
 				|BClose
+				|BTrue
+				|BFalse
 				|Nop deriving (Eq,Show)
 				
 
 type Token	=(TokenType,[Char])
 
 data TokenTree 	=TokenLeaf Token
-				|TokenNode Token TokenTree TokenTree
-			
-			
-ifstat=TokenNode (If,"if") 
-	(TokenNode (OpBool,"==") 
-		(TokenLeaf (Number, "3")) 
-		(TokenLeaf (Var, "c")))
-	
-	(TokenNode (Then,"then") 
-		(TokenNode (Statement, "" ) (TokenLeaf (Nop,"")) (TokenLeaf (Nop,""))) --thentree
-		(TokenNode (Statement, "" ) (TokenLeaf (Nop,"")) (TokenLeaf (Nop,"")))) --elsetree
+				|TokenNode Token TokenTree TokenTree deriving (Eq)
+				
+showTree::Int->TokenTree->[Char]
+showTree level (TokenLeaf t)		=(concat $ replicate (level-1) "    ")++(show t)
+showTree 0	t						=(showTree 1 t)++"\n"
+showTree level (TokenNode t tl tr)	=(concat $ replicate (level-1) "    ")++(show t)++"\n"
+										++(showTree (level+1) tl)++"\n"
+										++(showTree (level+1) tr)
+										
+instance Show TokenTree where
+	show t=showTree 0 t
+ 
+printTree::TokenTree->IO ()
+printTree t=putStr (show t)
