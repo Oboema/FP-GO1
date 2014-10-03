@@ -40,10 +40,10 @@ tokenize (x:xs)	|isDigit x	=(Number, num)			:tokenize rnum
 					_		->(OpBool, [x])			:tokenize xs
 				|x=='&'		=case xs of
 					'&':r	->(OpBool, x:"&")		:(tokenize $ tail xs)
-					_		->error "unexpected character"
+					_		->error "lexer error: unexpected character"
 				|x=='|'		=case xs of
 					'|':r	->(OpBool, x:"|")		:(tokenize $ tail xs)
-					_		->error "unexpected character"
+					_		->error "lexer error: unexpected character"
 				|x=='!'		=(Not, [x])				:tokenize xs
 				|x=='('		=(POpen, [x])			:tokenize xs
 				|x==')'		=(PClose, [x])			:tokenize xs

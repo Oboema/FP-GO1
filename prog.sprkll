@@ -1,7 +1,7 @@
 var a=2;
 a=a+3;
 var b=0;
-if true then
+if a>2 then
 {
 	b=2;
 	b=b*b;
