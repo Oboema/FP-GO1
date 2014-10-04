@@ -3,6 +3,7 @@ module Test where
 import Grammar
 import Lexer
 import Parser
+import Semantics
 
 ifTree=TokenNode (If,"if") 
 	(TokenNode (OpBool,"==") 
@@ -43,3 +44,7 @@ tree=do
 trees=do
 	t<-tree
 	return $ topLevel t
+	
+tcheck=do
+	t<-tree
+	return $ verify t

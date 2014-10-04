@@ -44,7 +44,9 @@ tokenize (x:xs)	|isDigit x	=(Number, num)			:tokenize rnum
 				|x=='|'		=case xs of
 					'|':r	->(OpBool, x:"|")		:(tokenize $ tail xs)
 					_		->error "lexer error: unexpected character"
-				|x=='!'		=(Not, [x])				:tokenize xs
+				|x=='!'		=case xs of
+					'=':r	->(OpBool, x:"=")		:(tokenize $ tail xs)
+					_		->(Not, [x])			:tokenize xs
 				|x=='('		=(POpen, [x])			:tokenize xs
 				|x==')'		=(PClose, [x])			:tokenize xs
 				|x=='{'		=(BOpen, [x])			:tokenize xs

@@ -1,12 +1,11 @@
 var a=2;
+const d=3;
+const e=d+4;
+var c=false;
+{
+	a=2;
+	a=a*a;
+}
 a=a+3;
 var b=0;
-if a>2 then
-{
-	b=2;
-	b=b*b;
-}
-else
-	b=1;
-a=b+a;
-a=a*a;
+a=a+b;

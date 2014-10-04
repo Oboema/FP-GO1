@@ -46,21 +46,24 @@ parse MulExpr (t:ts)			=(node,rest) where
 		((Mul,_):xs)	->(TokenNode (head r1) tl tr,r2)
 		((Div,_):xs)	->(TokenNode (head r1) tl tr,r2)
 		_			->(tl,r1)
+		
 parse AddExpr (t:ts)			=(node,rest) where
 	(tl, r1)	=parse MulExpr (t:ts)
 	(tr, r2)	=parse AddExpr (tail r1)
 	(node, rest)=case r1 of
 		((Plus,_):xs)	->(TokenNode (head r1) tl tr,r2)
-		((Min,_):xs)		->(TokenNode (head r1) tl tr,r2)
+		((Min,_):xs)	->(TokenNode (head r1) tl tr,r2)
 		_			->(tl,r1)
+		
 parse BoolExpr (t:ts)			=(node,rest) where
 	(tl, r1)	=parse AddExpr (t:ts)
 	(tr, r2)	=parse AddExpr (tail r1)
 	(node, rest)=case r1 of
 		((OpBool,_):xs)	->(TokenNode (head r1) tl tr,r2)
 		_			->(tl,r1)
-parse NegExpr (t@(Not,_):ts)	=((TokenNode t Nop tr),r) where
-	(tr,r)		=parse BoolExpr ts
+		
+parse NegExpr (t@(Not,_):ts)	=((TokenNode t tl Nop),r) where
+	(tl,r)		=parse BoolExpr ts
 parse NegExpr t	=parse BoolExpr t
 
 --Statement parsing
@@ -74,9 +77,10 @@ parse Block	ts					=(TokenNode (Semicolon,";") tl tr,r) where
 	(tl, r1)	=parse Stat ts
 	(tr, r)		=parse Block r1
 
-parse Stat (t@(BOpen,_):ts)		=parse Block ts
+parse Stat (t@(BOpen,_):ts)		=(TokenNode t tl Nop,r) where
+	(tl, r)	=parse Block ts
 	
-parse Stat ts@((Semicolon,_):_)	=(Nop, ts)
+parse Stat (t@(Semicolon,_):ts)	=parse Stat ts
 	
 parse Stat (t@(VarVar,_):ts)	=(TokenNode t (TokenLeaf tv) tr ,r) where
 	(tv, r1)	=consume Var ts
