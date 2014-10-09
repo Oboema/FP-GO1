@@ -144,36 +144,57 @@ cmpP nvar st (TokenNode _ (TokenNode (VarVar,_) (TokenLeaf (_,vname)) (TokenLeaf
 --cmpP nvar st (TokenNode (Semicolon,_) (TokenNode stmt (TokenNode sl@(sltp,slval)) sr@(srtp,srval))  tr )
 cmpP nvar (st:sts) (TokenNode (Semicolon,_) tl@(TokenNode stmt subsl subsr) tr ) =
                                         
-    case stmt of    (VarVar,"var")  -> 
-                        let
-                            TokenLeaf (Var, vname)  = subsl
-                            TokenLeaf (Number, n')  = subsr
-                            n                       = read n' :: Int
-                            st'                     = ((vname, (TE.Addr nvar)):st)
+    case stmt of    
+        (VarVar,"var")  -> 
+            let
+                TokenLeaf (Var, vname)  = subsl
+                TokenLeaf (Number, n')  = subsr
+                n                       = read n' :: Int
+                st'                     = ((vname, (TE.Addr nvar)):st)
 
-                        in  [TE.Store (TE.Imm n) nvar] ++ cmpP (nvar+1) (st':sts) tr
-                        --(trace "matched varvar" []) ++
-                    (Assignment,"=")->
-                        let
-                            TokenLeaf (Var, vname)  = subsl
-                            expr                    = subsr
-                            varaddr                 = (addr2int (getAddr vname (st:sts)) )
-                        in (cmpE (st:sts) expr) ++ [TE.Pop r4, TE.Store (TE.Addr r4) varaddr ] ++ cmpP nvar (st:sts) tr
-                        --(trace "matched assignment" []) ++ 
-                    
-                                    --subsr is always Nop with Bopen  ||  tr is after the scope so we throw it away
-                    (BOpen, "{")    ->  (cmpP nvar ([]:st:sts) subsl) ++ (cmpP nvar (st:sts) tr )
+            in  [TE.Store (TE.Imm n) nvar] ++ cmpP (nvar+1) (st':sts) tr
+            --(trace "matched varvar" []) ++
+        (Assignment,"=")->
+            let
+                TokenLeaf (Var, vname)  = subsl
+                expr                    = subsr
+                varaddr                 = (addr2int (getAddr vname (st:sts)) )
+            in (cmpE (st:sts) expr) ++ [TE.Pop r4, TE.Store (TE.Addr r4) varaddr ] ++ cmpP nvar (st:sts) tr
+            --(trace "matched assignment" []) ++ 
+        
+                        --subsr is always Nop with Bopen  ||  tr is after the scope so we throw it away
+        (BOpen, "{")    ->  (cmpP nvar ([]:st:sts) subsl) ++ cmpP nvar (st:sts) tr 
 
-                    (If, "if")      ->
-                        let
-                            (TokenNode (Then, "then") trueTree falseTree)   = subsr
-                            cond        = cmpE (st:sts) subsl
-                            --falseStat   =
-                            trueStat    = cmpP nvar (st:sts) trueTree
-                            falseStat   = cmpP nvar (st:sts) falseTree
-                            falseJump   = [TE.Jump TE.UR (length trueStat)]
-                            trueJump    = [TE.Jump TE.CR (length (falseStat++falseJump++trueStat))]
-                        in cond ++ trueJump ++ falseStat ++ falseJump ++ trueStat ++ cmpP nvar (st:sts) tr
+        (If, "if")      ->
+            let
+                (TokenNode (Then, "then") trueTree falseTree)   = subsr
+                cond        = cmpE (st:sts) subsl
+                --falseStat   =
+                trueStat    = cmpP nvar (st:sts) trueTree
+                falseStat   = cmpP nvar (st:sts) falseTree
+                falseJump   = [TE.Jump TE.UR (1 + (length trueStat))]
+                trueJump    = [TE.Jump TE.CR (1 + (length (falseStat++falseJump)))]
+            in cond ++ trueJump ++ falseStat ++ falseJump ++ trueStat ++ cmpP nvar (st:sts) tr
+
+        (While, "while")    ->
+            let
+                cond        = cmpE (st:sts) subsl
+                whileStat   = cmpP nvar (st:sts) subsr
+                jumpOut     = [TE.Compute TE.Not regA regA regA, TE.Jump TE.CR (1+(length (whileStat++jumpBack)))]
+                jumpBack    = [TE.Jump TE.UR (-(length(cond++jumpOut++whileStat)))]
+            in cond ++ jumpOut ++ whileStat ++ jumpBack ++ cmpP nvar (st:sts) tr
+
+-- hack for matching assignments it Then subtrees. 
+-- Parser throws away parent Semicolons of Assignments in Then subtrees
+-- which means they do not get matched by the above pattern.
+
+cmpP nvar (st:sts) (TokenNode (Assignment, _) (TokenLeaf (Var, vname)) expr ) =
+    let varaddr = (addr2int (getAddr vname (st:sts)) ) 
+    in (cmpE (st:sts) expr) ++ [TE.Pop r4, TE.Store (TE.Addr r4) varaddr ]
+
+--something similar with Bopens in converted For loops. 
+-- after staring at the parser for half an hour I resorted to this
+cmpP nvar (st:sts) (TokenNode (BOpen, "{") tl tr)   =  (cmpP nvar ([]:st:sts) tl) ++ cmpP nvar (st:sts) tr 
 
 cmpP nvar st (Nop)  = []
 
@@ -191,15 +212,20 @@ cmpP nvar st (TokenNode (Assignment,_) (TokenLeaf (_,vname)) expr ) =
 -}
 
 
+
 compile=do
     t<-tree
     return $ (cmpP 0 [[]] t) ++ [TE.EndProg]
+
+printasm=do
+    k<-compile
+    putStr $ unlines $ map show k
 
 --              regs    heap
 --watchlist =
 
 simu=do
     asm<-compile
-    let watchlist = ( [4,5],   [0,1,2]) 
+    let watchlist = ( [1,4,5],   [0,1,2]) 
     sim watchlist asm
 

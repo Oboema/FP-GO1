@@ -114,15 +114,16 @@ for var a = 3; b <4; d + 1
 -}
 -- for loop maken was kut, we schrijven t gewoon om naar een while.
 parse Stat (t@(For,_):ts)		=
-	((TokenNode (BOpen,"")
-		(TokenNode (Semicolon,"")
+	((TokenNode (BOpen,"{")
+		(TokenNode (Semicolon,";")
 			tll 
-			(TokenNode (Semicolon, "") 
-				(TokenNode (While,"") 
+			(TokenNode (Semicolon, ";") 
+				(TokenNode (While,"while") 
 					tlr 
-					(TokenNode (Semicolon,"") 
-						(TokenNode (Assignment,"") tvn trl) 
-						trr)
+					(TokenNode (Semicolon,";") 
+						trr
+						(TokenNode (Assignment,"=") tvn trl) 
+					)
 				)
 				Nop
 			)
