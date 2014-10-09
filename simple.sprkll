@@ -1,0 +1,7 @@
+var a=1;
+var b = 2;
+
+a = 3;
+if (a < b || b > 6) 
+then a = 666;
+else a = 333;

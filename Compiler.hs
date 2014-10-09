@@ -1,0 +1,205 @@
+module Compiler where 
+
+import Grammar
+import Lexer
+import Parser
+import Semantics
+import Debug.Trace
+import qualified TypesEtc as TE
+import Exec
+
+readtf::IO [Char]
+readtf=readFile "simple.sprkll"
+
+topLevel::TokenTree->[TokenTree]
+topLevel (TokenLeaf _)                  =error "Invalid parse tree"
+topLevel (Nop)                          =[]
+topLevel (TokenNode (Semicolon,_) tl tr)=tl:(topLevel tr)
+topLevel (TokenNode t tl tr)            =error "Invalid parse tree"
+
+
+tokens=do
+    a<-readtf
+    t<-return $ tokenize a
+    return t
+    
+tree=do
+    ts<-tokens
+    return $pp $ parseProgram ts
+    
+trees=do
+    t<-tree
+    return $ topLevel t
+    
+tcheck=do
+    t<-tree
+    return $ verify t
+
+tkn n tl tr = TokenNode n tl tr 
+tkl n = TokenLeaf n 
+
+
+-- r1 and r3 are used for stuff, I'll just use 4-6 then.
+-- disregard that, conditional jumps check regA == reg1 and jump if regA == 1.
+-- So we should store all results of expressions in regA
+r0=0
+regA=1  -- don't want to write TE.regA everywhere. Stupid double type names :( )
+r4=4
+r5=5
+r6=6
+
+
+--holy shit wat een typewerk, dat moet mooier kunnen. 
+--Ik denk dat het definieren van Plus Minus OpBool While Assignment etc als 1 type TokenType een fout was.
+--zo veel makkelijker als je TokenType = Op | Statement | NumVar ofzo hebt, met Op = Plus | Min | Mul, 
+--Statement = For | While | Assignment etc etc
+
+type Scop   = [(String, TE.Value)]
+type SymTb  = [Scop]
+
+bool2num :: Token -> Token
+bool2num tok@(ttype, _) | ttype == BFalse   = (Number, "0")
+                        | ttype == BTrue    = (Number, "1")
+                        | otherwise         = tok
+
+-- search and destroy bools and convert them to numbers
+pp :: TokenTree -> TokenTree
+pp (Nop)                = (Nop)
+pp (TokenLeaf leaf)     = tkl $ bool2num leaf
+pp (TokenNode n tl tr)  = (TokenNode n (pp tl) (pp tr))
+
+
+
+addr2int :: TE.Value -> Int
+addr2int (TE.Addr k)   = k 
+--getAddr' vname st    = head [addrInt | (TE.Addr addrInt) <- [getAddr vname st] ]
+
+{-}
+inScope::Scope->VarName->Maybe ValueDef
+inScope ((Result _ _):vs) name      =error "semantic error: unbound value in scope?"
+inScope [] name                     =Nothing
+inScope (td@(Bind vn _ _):vs) name  |name==vn   =Just td
+                                    |otherwise  =inScope vs name
+                                    
+-- checkt of shit bestaat in SymTab
+getValueDef::SymTab->VarName->ValueDef
+getValueDef [] name     =error ("semantic error: "++name++" not defined")
+getValueDef (s:ss) name =case (inScope s name) of
+    Just vd ->vd
+    Nothing ->getValueDef ss name
+-}
+inScop :: Scop -> String -> Maybe TE.Value
+inScop [] vname                     = Nothing
+inScop ((vname', addr):scs) vname   | vname == vname'   = Just addr
+                                    | otherwise         = inScop scs vname
+
+
+getAddr :: String -> SymTb -> TE.Value
+getAddr vname []                        = error ("variable "++(show vname)++" not found")
+getAddr vname (st:sts)  = case (inScop st vname) of
+    Just varaddr    -> varaddr
+    Nothing         -> getAddr vname sts 
+{-
+getAddr :: String -> SymTb -> TE.Value
+getAddr vname []                    = error ("variable "++(show vname)++" not found")
+getAddr vname ((vname', addr):sts)  | vname == vname'    = addr
+                                    | otherwise          = getAddr vname sts
+ -}
+                            -- reg
+
+term2asm :: SymTb -> Token -> Int -> TE.Assembly
+term2asm st (toktp, tokname) r  | toktp == Var      = TE.Load (getAddr tokname st ) r
+                                | toktp == Number   = TE.Load (TE.Imm (read tokname :: Int))  r
+                                | otherwise         = error ("got terminal "++(show (toktp,tokname))++" which was unexpected")
+
+cmpE :: SymTb -> TokenTree -> [TE.Assembly]
+cmpE st Nop                             = []
+cmpE st (TokenLeaf tok@(ltype, lval))   = [ term2asm st tok regA, TE.Push regA]
+cmpE st (TokenNode op@(_, opStr) tl tr) =  (cmpE st tl) ++ (cmpE st tr) ++ opCode where
+
+--cmpE st (TokenNode (opType, opStr) (TokenLeaf (Var,vn1)) (TokenLeaf (Var, vn2))  ) =
+    opCode = case opStr of  "+"  -> doOp TE.Add --[Compute Add r4 r5 r6, Push r6]
+                            "-"  -> doOp TE.Sub --[Compute Sub r4 r5 r6, Push r6]
+                            "*"  -> doOp TE.Mul --[Compute Sub r4 r5 r6, Push r6]
+                            "/"  -> doOp TE.Div
+                            "==" -> doOp TE.Equal
+                            "!=" -> doOp TE.NEq
+                            ">"  -> doOp TE.Gt
+                            "<"  -> doOp TE.Lt
+                            "||" -> doOp TE.Or
+                            "&&" -> doOp TE.And
+                            "!"  -> [TE.Pop r4, TE.Compute TE.Not r4 r4 regA, TE.Push regA]
+        where doOp op = [TE.Pop r5, TE.Pop r4, TE.Compute op r4 r5 regA, TE.Push regA]
+
+
+                -- symbol table
+cmpP :: Int -> SymTb -> TokenTree -> [TE.Assembly]
+-- add varvar to symtab
+--           must be ;
+{-}
+cmpP nvar st (TokenNode _ (TokenNode (VarVar,_) (TokenLeaf (_,vname)) (TokenLeaf (vtype,val)) ) tr ) =
+    cmpP (nvar+1) ((vname, (TE.Addr nvar) ):st) tr
+-}
+                        --node        |--                            tl                        --|  tr         
+--cmpP nvar st (TokenNode (Semicolon,_) (TokenNode stmt (TokenNode sl@(sltp,slval)) sr@(srtp,srval))  tr )
+cmpP nvar (st:sts) (TokenNode (Semicolon,_) tl@(TokenNode stmt subsl subsr) tr ) =
+                                        
+    case stmt of    (VarVar,"var")  -> 
+                        let
+                            TokenLeaf (Var, vname)  = subsl
+                            TokenLeaf (Number, n')  = subsr
+                            n                       = read n' :: Int
+                            st'                     = ((vname, (TE.Addr nvar)):st)
+
+                        in  [TE.Store (TE.Imm n) nvar] ++ cmpP (nvar+1) (st':sts) tr
+                        --(trace "matched varvar" []) ++
+                    (Assignment,"=")->
+                        let
+                            TokenLeaf (Var, vname)  = subsl
+                            expr                    = subsr
+                            varaddr                 = (addr2int (getAddr vname (st:sts)) )
+                        in (cmpE (st:sts) expr) ++ [TE.Pop r4, TE.Store (TE.Addr r4) varaddr ] ++ cmpP nvar (st:sts) tr
+                        --(trace "matched assignment" []) ++ 
+                    
+                                    --subsr is always Nop with Bopen  ||  tr is after the scope so we throw it away
+                    (BOpen, "{")    ->  (cmpP nvar ([]:st:sts) subsl) ++ (cmpP nvar (st:sts) tr )
+
+                    (If, "if")      ->
+                        let
+                            (TokenNode (Then, "then") trueTree falseTree)   = subsr
+                            cond        = cmpE (st:sts) subsl
+                            --falseStat   =
+                            trueStat    = cmpP nvar (st:sts) trueTree
+                            falseStat   = cmpP nvar (st:sts) falseTree
+                            falseJump   = [TE.Jump TE.UR (length trueStat)]
+                            trueJump    = [TE.Jump TE.CR (length (falseStat++falseJump++trueStat))]
+                        in cond ++ trueJump ++ falseStat ++ falseJump ++ trueStat ++ cmpP nvar (st:sts) tr
+
+cmpP nvar st (Nop)  = []
+
+
+cmpP nvar st t      = trace ("not caught pattern:\n"++(show t)) []
+{-}
+
+-- got an assignment with no reducable expression. Var cannot be ConstVar because awesome parser
+cmpP nvar st (TokenNode (Assignment,_) (TokenLeaf (_,vname)) expr ) = 
+    (cmpE st expr) ++ [TE.Pop r4, TE.Store (TE.Addr r4) (addr2int (getAddr vname st))]
+
+
+
+
+-}
+
+
+compile=do
+    t<-tree
+    return $ (cmpP 0 [[]] t) ++ [TE.EndProg]
+
+--              regs    heap
+--watchlist =
+
+simu=do
+    asm<-compile
+    let watchlist = ( [4,5],   [0,1,2]) 
+    sim watchlist asm
+

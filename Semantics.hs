@@ -5,12 +5,14 @@ import Debug.Trace
 
 type VarName	=[Char]
 
+-- sprockel types, handig
 data SprType	=SInt
 				|SBool
 				|SVoid deriving (Eq, Show)
 
 type ConstFlag	=Bool
 
+-- iets is of een binding van een var, of een resultaat van expressie. Result == type tussenresultaat
 data ValueDef	=Bind VarName ConstFlag SprType
 				|Result ConstFlag SprType deriving (Eq,Show)
 				
@@ -27,12 +29,15 @@ inScope [] name						=Nothing
 inScope (td@(Bind vn _ _):vs) name	|name==vn	=Just td
 									|otherwise	=inScope vs name
 									
+-- checkt of shit bestaat in SymTab
 getValueDef::SymTab->VarName->ValueDef
 getValueDef [] name		=error ("semantic error: "++name++" not defined")
 getValueDef (s:ss) name	=case (inScope s name) of
 	Just vd	->vd
 	Nothing	->getValueDef ss name
 	
+--  checkt of resultaten in rechter en linker boom legaal zijn, overeenomen met verwachting.
+-- assert symtab, treelef, treerig, verwacht tl, verwacht tr, uiteindelijk tree resultaat
 assert st tl tr vtl vtr vtres	|vtl==evtl && vtr==evtr	=Result (cfl&&cfr) vtres
 								|otherwise				=error "semantic error: unexpected type for operation"
 								where
@@ -56,6 +61,7 @@ check st (Nop)									=Result False SVoid
 check st (TokenLeaf (Var,vn))					=Result cf vdt where
 	(Bind _ cf vdt)	=getValueDef st vn
 	
+-- vdt = value definition type, int of bool
 check (cs:st) (TokenNode (VarVar,_) (TokenLeaf (Var,vn)) tr)	
 												|(inScope cs vn)==Nothing	=Bind vn False vdt
 												|otherwise					=error ("semantic error: "++vn++" already defined in this scope")
@@ -113,6 +119,7 @@ check st (TokenNode (Not,_) tl _)				|evtl==SBool			=Result cf evtl
 												where
 													(Result cf evtl)	=check st tl
 													
+--check if bla  bla bla in (if a<3 then {bla bla bla} is valid)
 check st (TokenNode (If,_) tl (TokenNode (Then, _) trl trr))	
 												|vdl==SBool	&& crl==crr	=crl
 												|otherwise 				=error "semantic error: expression has to have the boolean type"
@@ -125,14 +132,6 @@ check st (TokenNode (While,_) tl tr)			|evtl==SBool	=check st tr
 												|otherwise		=error "semantic error: while needs a boolean expression"
 												where
 													(Result cf evtl)	=check st tl
-													
-check (s:st) (TokenNode (For,_) (TokenNode (For,_) tll tlr) (TokenNode (For,_) trl trr))
-												|vtll==vtrr && vtlr==SBool		=evdrr
-												|otherwise 						=error "semantic error: for is a hard"
-												where
-													evdll@(Bind _ cfll vtll)	=check st tll
-													st'							=(evdll:s):st
-													evdlr@(Result cflr vtlr)	=check st' tlr
-													evdrl@(Result cfrl vtrl)	=check st' trl
-													evdrr@(Result cfrr vtrr)	=check st' trr
+
+
 check st (TokenNode (tt,ts) tl tr)				=error ("semantic error: check not yet implemented for "++(show tt))

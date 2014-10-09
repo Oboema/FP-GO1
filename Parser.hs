@@ -57,7 +57,7 @@ parse AddExpr (t:ts)			=(node,rest) where
 		
 parse BoolExpr (t:ts)			=(node,rest) where
 	(tl, r1)	=parse AddExpr (t:ts)
-	(tr, r2)	=parse AddExpr (tail r1)
+	(tr, r2)	=parse BoolExpr (tail r1)
 	(node, rest)=case r1 of
 		((OpBool,_):xs)	->(TokenNode (head r1) tl tr,r2)
 		_			->(tl,r1)
@@ -103,8 +103,34 @@ parse Stat (t@(While,_):ts)		=(TokenNode t tl tr, r) where
 	(tl, r1)	=parse NegExpr ts
 	(tr, r)		=parse Stat r1
 	
-parse Stat (t@(For,_):ts)		=(TokenNode t (TokenNode t tll tlr) (TokenNode t trl trr), r) where
-	(tll, r1)	=parse ForDef ts
+{-
+3e statement wordt impliciet in a gestopt.
+2e statement moet Bool Expr zijn
+1e statement moet var def en assignment zijn.
+for var a = 3; b <4; d + 1 
+{
+    a=4;
+}
+-}
+-- for loop maken was kut, we schrijven t gewoon om naar een while.
+parse Stat (t@(For,_):ts)		=
+	((TokenNode (BOpen,"")
+		(TokenNode (Semicolon,"")
+			tll 
+			(TokenNode (Semicolon, "") 
+				(TokenNode (While,"") 
+					tlr 
+					(TokenNode (Semicolon,"") 
+						(TokenNode (Assignment,"") tvn trl) 
+						trr)
+				)
+				Nop
+			)
+		)
+		Nop
+	),r)where
+
+	(tll@(TokenNode _ tvn _), r1)	=parse ForDef ts
 	(_, r2)		=consume Semicolon r1
 	(tlr, r3)	=parse NegExpr r2
 	(_, r4)		=consume Semicolon r3

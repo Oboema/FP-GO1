@@ -2,10 +2,21 @@ var a=2;
 const d=3;
 const e=d+4;
 var c=false;
+var g=true;
+var k=false;
+
 {
 	a=2;
 	a=a*a;
+    c = ! c || g && k;
 }
+
+
+for var as = 3; as <4; d + 1 
+{
+    a=4;
+}
+
 a=a+3;
 var b=0;
 a=a+b;
