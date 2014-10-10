@@ -11,12 +11,6 @@ var k=false;
     c = ! c || g && k;
 }
 
-
-for var as = 3; as <4; d + 1 
-{
-    a=4;
-}
-
 a=a+3;
 var b=0;
 a=a+b;

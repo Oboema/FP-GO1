@@ -1,4 +1,4 @@
-module Compiler where 
+module Compiler(compile) where 
 
 import Grammar
 import Lexer
@@ -183,21 +183,6 @@ cmpP nvar st (Nop)  = []
 
 cmpP nvar st t      = trace ("not caught pattern:\n"++(show t)) []
 
-
-
-compile=do
-    t<-tree
-    return $ (cmpP 0 [[]] t) ++ [TE.EndProg]
-
-printasm=do
-    k<-compile
-    putStr $ unlines $ map show k
-
---              regs    heap
---watchlist =
-
-simu=do
-    asm<-compile
-    let watchlist = ( [1,4,5],   [0,1,2]) 
-    sim watchlist asm
+compile::TokenTree->[TE.Assembly]
+compile t	=(cmpP 0 [[]] t) ++ [TE.EndProg]
 
