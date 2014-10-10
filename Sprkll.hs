@@ -12,7 +12,7 @@ import Compiler
 lookAtRegs =([4,5],[0,1,2])
 
 compileString a	|check		=instr
-				|otherwise =error "unchecked semantic error occured" 
+				|otherwise =error "unchecked semantic error occurred" 
 				where
 					tokens	=tokenize a
 					tree	=parseProgram tokens

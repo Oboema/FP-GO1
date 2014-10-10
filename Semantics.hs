@@ -12,7 +12,7 @@ data SprType	=SInt
 
 type ConstFlag	=Bool
 
--- iets is of een binding van een var, of een resultaat van expressie. Result == type tussenresultaat
+--the type of a TokenTree is either the result of an expression/Void or a binding of a variable(with type)
 data ValueDef	=Bind VarName ConstFlag SprType
 				|Result ConstFlag SprType deriving (Eq,Show)
 				
@@ -29,21 +29,23 @@ inScope [] name						=Nothing
 inScope (td@(Bind vn _ _):vs) name	|name==vn	=Just td
 									|otherwise	=inScope vs name
 									
--- checkt of shit bestaat in SymTab
+--checks existence of variables in the symbol table
 getValueDef::SymTab->VarName->ValueDef
 getValueDef [] name		=error ("semantic error: "++name++" not defined")
 getValueDef (s:ss) name	=case (inScope s name) of
 	Just vd	->vd
 	Nothing	->getValueDef ss name
 	
---  checkt of resultaten in rechter en linker boom legaal zijn, overeenomen met verwachting.
--- assert symtab, treelef, treerig, verwacht tl, verwacht tr, uiteindelijk tree resultaat
+-- checks the types of the left and right subtree and compares it to the expected types and returns a final type of the tree
+-- assert symtab, treeleft, treeright, expectedtreeleft, expectedtreeright, finaltreeresult
 assert st tl tr vtl vtr vtres	|vtl==evtl && vtr==evtr	=Result (cfl&&cfr) vtres
 								|otherwise				=error "semantic error: unexpected type for operation"
 								where
 									(Result cfl evtl)	=check st tl
 									(Result cfr evtr)	=check st tr
 
+--type of a program TokenTree will always be the end of the right statement subtree with at its end a Nop leaf=Result False Void
+--false is not really an option, it will either fail or return true
 verify::TokenTree->Bool
 verify t	=(Result False SVoid)==(check [[]] t)
 
@@ -89,8 +91,7 @@ check st (TokenNode (Assignment,_) tl tr)		|cfl==False && vtl==vtr	=Result cfr S
 												where
 													(Result cfl vtl)	=check st tl
 													(Result cfr vtr)	=check st tr
---checks for all operations
-													
+--checks for all operations													
 check st (TokenNode (Plus,_) tl tr)				=assert st tl tr SInt SInt SInt
 check st (TokenNode (Min,_) tl tr)				=assert st tl tr SInt SInt SInt
 check st (TokenNode (Mul,_) tl tr)				=assert st tl tr SInt SInt SInt
@@ -107,7 +108,7 @@ check st (TokenNode (OpBool,"==") tl tr)		|(evtl==evtr)	=Result (cfl&&cfr) SBool
 												where
 													(Result cfl evtl)	=check st tl
 													(Result cfr evtr)	=check st tr
-													
+
 check st (TokenNode (OpBool,"!=") tl tr)		|(evtl==evtr)	=Result (cfl&&cfr) SBool
 												|otherwise		=error "semantic error: operation requires the same types"
 												where
@@ -118,8 +119,8 @@ check st (TokenNode (Not,_) tl _)				|evtl==SBool			=Result cf evtl
 												|otherwise				=error "semantic error: bool required"
 												where
 													(Result cf evtl)	=check st tl
-													
---check if bla  bla bla in (if a<3 then {bla bla bla} is valid)
+
+--check controlstructures and loop													
 check st (TokenNode (If,_) tl (TokenNode (Then, _) trl trr))	
 												|vdl==SBool	&& crl==crr	=crl
 												|otherwise 				=error "semantic error: expression has to have the boolean type"
@@ -132,6 +133,5 @@ check st (TokenNode (While,_) tl tr)			|evtl==SBool	=check st tr
 												|otherwise		=error "semantic error: while needs a boolean expression"
 												where
 													(Result cf evtl)	=check st tl
-
 
 check st (TokenNode (tt,ts) tl tr)				=error ("semantic error: check not yet implemented for "++(show tt))

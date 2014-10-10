@@ -13,6 +13,7 @@ data NonTerminal	=Program
 					|MulExpr
 					|Operand deriving (Show)
 
+--check whether the correct tokentype is at the head of the tokenstream and return the token with the rest
 consume::TokenType->[Token]->(Token,[Token])
 consume a (x:xs)|a==(fst x)	=(x,xs)
 				|otherwise		=error ("parser error: expected "++(show a)++" but found "++(show x))
@@ -22,7 +23,6 @@ parseExpression=fst.(parse NegExpr)
 
 parseProgram::[Token]->TokenTree
 parseProgram=fst.(parse Program)
-
 
 parse::NonTerminal->[Token]->(TokenTree,[Token])
 
@@ -102,28 +102,20 @@ parse Stat (t@(Var,_):ts)		=(TokenNode tn (TokenLeaf t) tr,r) where
 parse Stat (t@(While,_):ts)		=(TokenNode t tl (TokenNode (Semicolon,";") tr Nop), r) where
 	(tl, r1)	=parse NegExpr ts
 	(tr, r)		=parse Stat r1
-	
-{-
-3e statement wordt impliciet in a gestopt.
-2e statement moet Bool Expr zijn
-1e statement moet var def en assignment zijn.
-for var a = 3; b <4; d + 1 
-{
-    a=4;
-}
--}
--- for loop maken was kut, we schrijven t gewoon om naar een while.
-parse Stat (t@(For,_):ts)		=
+
+--for typedef;booleanexpr;expr stat;
+--For loops are rewritten to a while loop.
+parse Stat (t@(For,_):ts)	=
 	((TokenNode (BOpen,"{")
 		(TokenNode (Semicolon,";")
-			tll 
+			tll 												--typedef
 			(TokenNode (Semicolon, ";") 
 				(TokenNode (While,"while") 
-					tlr 
+					tlr 										--booleanexpr goes into the while loop
 					(TokenNode (Semicolon,";") 
-						trr
+						trr										--stat//content of the loop
 						(TokenNode (Semicolon,";") 
-							(TokenNode (Assignment,"=") tvn trl) 
+							(TokenNode (Assignment,"=") tvn trl)--implicit assignment of the exor to the typedef
 							Nop)
 					)
 				)
