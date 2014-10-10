@@ -185,9 +185,19 @@ cmpP nvar st t      = trace ("not caught pattern:\n"++(show t)) []
 
 
 
+test = do
+    isOk <- tcheck
+    case isOk of
+        False -> return "a"
+        True  -> return "lol true"
+        --_     -> return "something else"
+
 compile=do
     t<-tree
-    return $ (cmpP 0 [[]] t) ++ [TE.EndProg]
+    isOk <- tcheck
+    case isOk of
+        False   -> error "Something is wrong with the program!"
+        True    -> return $ (cmpP 0 [[]] t) ++ [TE.EndProg]
 
 printasm=do
     k<-compile
