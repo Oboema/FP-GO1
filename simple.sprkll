@@ -1,9 +1,16 @@
-var a=11;
-var b = 122;
+var a=3;
 
-
-for var a = 1; a < 10; a + 1 
-{
-    b=a+b;
+while( a != 1){
+    if((a/2) == ((a+1)/2) )
+    then a = a/2;
+    else a = 3*a+1;
 }
 
+var b = 0;
+for var i = 0; i < 10; i + 1
+{
+    for var j = 0; j < 10; j+1
+    {
+        b = b + 1;
+    }
+}

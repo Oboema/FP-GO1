@@ -48,11 +48,17 @@ r4=4
 r5=5
 r6=6
 
+--we need to pop to avoid overloading the stack when doing a conditional jump
+-- doesn't really matter as there is an unlimited stack, but this keeps the ouput
+-- of sim readable for long running programs
+pop = TE.Pop r0
 
 --holy shit wat een typewerk, dat moet mooier kunnen. 
 --Ik denk dat het definieren van Plus Minus OpBool While Assignment etc als 1 type TokenType een fout was.
 --zo veel makkelijker als je TokenType = Op | Statement | NumVar ofzo hebt, met Op = Plus | Min | Mul, 
 --Statement = For | While | Assignment etc etc
+--Dit wordt ook in de parser gedaan, maar nadat je het daar zorgvuldig opbouwt flikker je het weg =( 
+
 
 type Scop   = [(String, TE.Value)]
 type SymTb  = [Scop]
@@ -72,22 +78,7 @@ pp (TokenNode n tl tr)  = (TokenNode n (pp tl) (pp tr))
 
 addr2int :: TE.Value -> Int
 addr2int (TE.Addr k)   = k 
---getAddr' vname st    = head [addrInt | (TE.Addr addrInt) <- [getAddr vname st] ]
 
-{-}
-inScope::Scope->VarName->Maybe ValueDef
-inScope ((Result _ _):vs) name      =error "semantic error: unbound value in scope?"
-inScope [] name                     =Nothing
-inScope (td@(Bind vn _ _):vs) name  |name==vn   =Just td
-                                    |otherwise  =inScope vs name
-                                    
--- checkt of shit bestaat in SymTab
-getValueDef::SymTab->VarName->ValueDef
-getValueDef [] name     =error ("semantic error: "++name++" not defined")
-getValueDef (s:ss) name =case (inScope s name) of
-    Just vd ->vd
-    Nothing ->getValueDef ss name
--}
 inScop :: Scop -> String -> Maybe TE.Value
 inScop [] vname                     = Nothing
 inScop ((vname', addr):scs) vname   | vname == vname'   = Just addr
@@ -99,12 +90,6 @@ getAddr vname []                        = error ("variable "++(show vname)++" no
 getAddr vname (st:sts)  = case (inScop st vname) of
     Just varaddr    -> varaddr
     Nothing         -> getAddr vname sts 
-{-
-getAddr :: String -> SymTb -> TE.Value
-getAddr vname []                    = error ("variable "++(show vname)++" not found")
-getAddr vname ((vname', addr):sts)  | vname == vname'    = addr
-                                    | otherwise          = getAddr vname sts
- -}
                             -- reg
 
 term2asm :: SymTb -> Token -> Int -> TE.Assembly
@@ -114,7 +99,7 @@ term2asm st (toktp, tokname) r  | toktp == Var      = TE.Load (getAddr tokname s
 
 cmpE :: SymTb -> TokenTree -> [TE.Assembly]
 cmpE st Nop                             = []
-cmpE st (TokenLeaf tok@(ltype, lval))   = [ term2asm st tok regA, TE.Push regA]
+cmpE st (TokenLeaf tok)                 = [ term2asm st tok regA, TE.Push regA]
 cmpE st (TokenNode op@(_, opStr) tl tr) =  (cmpE st tl) ++ (cmpE st tr) ++ opCode where
 
 --cmpE st (TokenNode (opType, opStr) (TokenLeaf (Var,vn1)) (TokenLeaf (Var, vn2))  ) =
@@ -128,18 +113,12 @@ cmpE st (TokenNode op@(_, opStr) tl tr) =  (cmpE st tl) ++ (cmpE st tr) ++ opCod
                             "<"  -> doOp TE.Lt
                             "||" -> doOp TE.Or
                             "&&" -> doOp TE.And
-                            "!"  -> [TE.Pop r4, TE.Compute TE.Not r4 r4 regA, TE.Push regA]
+                            "!"  -> [TE.Pop r4, TE.Compute TE.Not r4 r4 regA ]--, TE.Push regA]
         where doOp op = [TE.Pop r5, TE.Pop r4, TE.Compute op r4 r5 regA, TE.Push regA]
 
 
                 -- symbol table
 cmpP :: Int -> SymTb -> TokenTree -> [TE.Assembly]
--- add varvar to symtab
---           must be ;
-{-}
-cmpP nvar st (TokenNode _ (TokenNode (VarVar,_) (TokenLeaf (_,vname)) (TokenLeaf (vtype,val)) ) tr ) =
-    cmpP (nvar+1) ((vname, (TE.Addr nvar) ):st) tr
--}
                         --node        |--                            tl                        --|  tr         
 --cmpP nvar st (TokenNode (Semicolon,_) (TokenNode stmt (TokenNode sl@(sltp,slval)) sr@(srtp,srval))  tr )
 cmpP nvar (st:sts) (TokenNode (Semicolon,_) tl@(TokenNode stmt subsl subsr) tr ) =
@@ -153,14 +132,13 @@ cmpP nvar (st:sts) (TokenNode (Semicolon,_) tl@(TokenNode stmt subsl subsr) tr )
                 st'                     = ((vname, (TE.Addr nvar)):st)
 
             in  [TE.Store (TE.Imm n) nvar] ++ cmpP (nvar+1) (st':sts) tr
-            --(trace "matched varvar" []) ++
+
         (Assignment,"=")->
             let
                 TokenLeaf (Var, vname)  = subsl
                 expr                    = subsr
                 varaddr                 = (addr2int (getAddr vname (st:sts)) )
             in (cmpE (st:sts) expr) ++ [TE.Pop r4, TE.Store (TE.Addr r4) varaddr ] ++ cmpP nvar (st:sts) tr
-            --(trace "matched assignment" []) ++ 
         
                         --subsr is always Nop with Bopen  ||  tr is after the scope so we throw it away
         (BOpen, "{")    ->  (cmpP nvar ([]:st:sts) subsl) ++ cmpP nvar (st:sts) tr 
@@ -169,47 +147,32 @@ cmpP nvar (st:sts) (TokenNode (Semicolon,_) tl@(TokenNode stmt subsl subsr) tr )
             let
                 (TokenNode (Then, "then") trueTree falseTree)   = subsr
                 cond        = cmpE (st:sts) subsl
-                --falseStat   =
                 trueStat    = cmpP nvar (st:sts) trueTree
                 falseStat   = cmpP nvar (st:sts) falseTree
                 falseJump   = [TE.Jump TE.UR (1 + (length trueStat))]
-                trueJump    = [TE.Jump TE.CR (1 + (length (falseStat++falseJump)))]
+                trueJump    = [pop, TE.Jump TE.CR (1 + (length (falseStat++falseJump)))]
             in cond ++ trueJump ++ falseStat ++ falseJump ++ trueStat ++ cmpP nvar (st:sts) tr
 
         (While, "while")    ->
             let
                 cond        = cmpE (st:sts) subsl
                 whileStat   = cmpP nvar (st:sts) subsr
-                jumpOut     = [TE.Compute TE.Not regA regA regA, TE.Jump TE.CR (1+(length (whileStat++jumpBack)))]
+                jumpOut     = [TE.Compute TE.Not regA regA regA, pop, TE.Jump TE.CR (1+(length (whileStat++jumpBack)))]
                 jumpBack    = [TE.Jump TE.UR (-(length(cond++jumpOut++whileStat)))]
             in cond ++ jumpOut ++ whileStat ++ jumpBack ++ cmpP nvar (st:sts) tr
 
 -- hack for matching assignments it Then subtrees. 
 -- Parser throws away parent Semicolons of Assignments in Then subtrees
 -- which means they do not get matched by the above pattern.
+-- there be dragons in the parser, so I thought this would save some time :)
 
 cmpP nvar (st:sts) (TokenNode (Assignment, _) (TokenLeaf (Var, vname)) expr ) =
     let varaddr = (addr2int (getAddr vname (st:sts)) ) 
     in (cmpE (st:sts) expr) ++ [TE.Pop r4, TE.Store (TE.Addr r4) varaddr ]
 
---something similar with Bopens in converted For loops. 
--- after staring at the parser for half an hour I resorted to this
-cmpP nvar (st:sts) (TokenNode (BOpen, "{") tl tr)   =  (cmpP nvar ([]:st:sts) tl) ++ cmpP nvar (st:sts) tr 
-
 cmpP nvar st (Nop)  = []
 
-
 cmpP nvar st t      = trace ("not caught pattern:\n"++(show t)) []
-{-}
-
--- got an assignment with no reducable expression. Var cannot be ConstVar because awesome parser
-cmpP nvar st (TokenNode (Assignment,_) (TokenLeaf (_,vname)) expr ) = 
-    (cmpE st expr) ++ [TE.Pop r4, TE.Store (TE.Addr r4) (addr2int (getAddr vname st))]
-
-
-
-
--}
 
 
 
