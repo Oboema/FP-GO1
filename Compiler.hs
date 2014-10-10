@@ -100,21 +100,25 @@ term2asm st (toktp, tokname) r  | toktp == Var      = TE.Load (getAddr tokname s
 cmpE :: SymTb -> TokenTree -> [TE.Assembly]
 cmpE st Nop                             = []
 cmpE st (TokenLeaf tok)                 = [ term2asm st tok regA, TE.Push regA]
-cmpE st (TokenNode op@(_, opStr) tl tr) =  (cmpE st tl) ++ (cmpE st tr) ++ opCode where
+
+cmpE st (TokenNode op@(_, opStr) tl tr) =  opCodes where
 
 --cmpE st (TokenNode (opType, opStr) (TokenLeaf (Var,vn1)) (TokenLeaf (Var, vn2))  ) =
-    opCode = case opStr of  "+"  -> doOp TE.Add --[Compute Add r4 r5 r6, Push r6]
-                            "-"  -> doOp TE.Sub --[Compute Sub r4 r5 r6, Push r6]
-                            "*"  -> doOp TE.Mul --[Compute Sub r4 r5 r6, Push r6]
-                            "/"  -> doOp TE.Div
-                            "==" -> doOp TE.Equal
-                            "!=" -> doOp TE.NEq
-                            ">"  -> doOp TE.Gt
-                            "<"  -> doOp TE.Lt
-                            "||" -> doOp TE.Or
-                            "&&" -> doOp TE.And
-                            "!"  -> [TE.Pop r4, TE.Compute TE.Not r4 r4 regA ]--, TE.Push regA]
-        where doOp op = [TE.Pop r5, TE.Pop r4, TE.Compute op r4 r5 regA, TE.Push regA]
+    opCodes = case opStr of  
+            "+"  -> doOp TE.Add --[Compute Add r4 r5 r6, Push r6]
+            "-"  -> doOp TE.Sub --[Compute Sub r4 r5 r6, Push r6]
+            "*"  -> doOp TE.Mul --[Compute Sub r4 r5 r6, Push r6]
+            "/"  -> doOp TE.Div
+            "==" -> doOp TE.Equal
+            "!=" -> doOp TE.NEq
+            ">"  -> doOp TE.Gt
+            "<"  -> doOp TE.Lt
+            "||" -> doOp TE.Or
+            "&&" -> doOp TE.And
+            ">=" -> cmpE st (TokenNode (OpBool, "||") (TokenNode (OpBool,">") tl tr) (TokenNode (OpBool,"==") tl tr) )
+            "<=" -> cmpE st (TokenNode (OpBool, "||") (TokenNode (OpBool,"<") tl tr) (TokenNode (OpBool,"==") tl tr) )
+            "!"  -> [TE.Pop r4, TE.Compute TE.Not r4 r4 regA ]--, TE.Push regA]
+        where doOp op = (cmpE st tl) ++ (cmpE st tr) ++ [TE.Pop r5, TE.Pop r4, TE.Compute op r4 r5 regA, TE.Push regA]
 
 
                 -- symbol table
@@ -169,6 +173,11 @@ cmpP nvar (st:sts) (TokenNode (Semicolon,_) tl@(TokenNode stmt subsl subsr) tr )
 cmpP nvar (st:sts) (TokenNode (Assignment, _) (TokenLeaf (Var, vname)) expr ) =
     let varaddr = (addr2int (getAddr vname (st:sts)) ) 
     in (cmpE (st:sts) expr) ++ [TE.Pop r4, TE.Store (TE.Addr r4) varaddr ]
+        
+-- same with Bopen, sometimes it pops up without a Semicolon parent.                            ||should always be Nop but ah well
+cmpP nvar (st:sts) (TokenNode (BOpen, "{") subsl subsr )    =  (cmpP nvar ([]:st:sts) subsl) ++ cmpP nvar (st:sts) subsr
+
+
 
 cmpP nvar st (Nop)  = []
 
