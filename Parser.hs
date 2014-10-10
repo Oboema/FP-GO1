@@ -122,7 +122,9 @@ parse Stat (t@(For,_):ts)		=
 					tlr 
 					(TokenNode (Semicolon,";") 
 						trr
-						(TokenNode (Assignment,"=") tvn trl) 
+						(TokenNode (Semicolon,";") 
+							(TokenNode (Assignment,"=") tvn trl) 
+							Nop)
 					)
 				)
 				Nop

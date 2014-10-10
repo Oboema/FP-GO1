@@ -169,14 +169,14 @@ cmpP nvar (st:sts) (TokenNode (Semicolon,_) tl@(TokenNode stmt subsl subsr) tr )
 -- Parser throws away parent Semicolons of Assignments in Then subtrees
 -- which means they do not get matched by the above pattern.
 -- there be dragons in the parser, so I thought this would save some time :)
-
+{-}
 cmpP nvar (st:sts) (TokenNode (Assignment, _) (TokenLeaf (Var, vname)) expr ) =
     let varaddr = (addr2int (getAddr vname (st:sts)) ) 
     in (cmpE (st:sts) expr) ++ [TE.Pop r4, TE.Store (TE.Addr r4) varaddr ]
         
 -- same with Bopen, sometimes it pops up without a Semicolon parent.                            ||should always be Nop but ah well
 cmpP nvar (st:sts) (TokenNode (BOpen, "{") subsl subsr )    =  (cmpP nvar ([]:st:sts) subsl) ++ cmpP nvar (st:sts) subsr
-
+-}
 
 
 cmpP nvar st (Nop)  = []

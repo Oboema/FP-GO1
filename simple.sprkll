@@ -5,13 +5,3 @@ while( a != 1){
     then a = a/2;
     else a = 3*a+1;
 }
-
-var b = 1337;
-var c = 0;
-for var a = 0; a <= 10; a + 1
-{
-    for var b = 10; b >= 0; b-1
-    {
-        c = c + 1;
-    }
-}
