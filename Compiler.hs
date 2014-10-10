@@ -1,39 +1,9 @@
-module Compiler(compile) where 
+module Compiler(compile,eval) where 
 
 import Grammar
-import Lexer
-import Parser
-import Semantics
 import Debug.Trace
 import qualified TypesEtc as TE
 import Exec
-
-readtf::IO [Char]
-readtf=readFile "simple.sprkll"
-
-topLevel::TokenTree->[TokenTree]
-topLevel (TokenLeaf _)                  =error "Invalid parse tree"
-topLevel (Nop)                          =[]
-topLevel (TokenNode (Semicolon,_) tl tr)=tl:(topLevel tr)
-topLevel (TokenNode t tl tr)            =error "Invalid parse tree"
-
-
-tokens=do
-    a<-readtf
-    t<-return $ tokenize a
-    return t
-    
-tree=do
-    ts<-tokens
-    return $pp $ parseProgram ts
-    
-trees=do
-    t<-tree
-    return $ topLevel t
-    
-tcheck=do
-    t<-tree
-    return $ verify t
 
 tkn n tl tr = TokenNode n tl tr 
 tkl n = TokenLeaf n 
@@ -84,6 +54,8 @@ inScop [] vname                     = Nothing
 inScop ((vname', addr):scs) vname   | vname == vname'   = Just addr
                                     | otherwise         = inScop scs vname
 
+									
+									
 
 getAddr :: String -> SymTb -> TE.Value
 getAddr vname []                        = error ("variable "++(show vname)++" not found")
@@ -97,6 +69,42 @@ term2asm st (toktp, tokname) r  | toktp == Var      = TE.Load (getAddr tokname s
                                 | toktp == Number   = TE.Load (TE.Imm (read tokname :: Int))  r
                                 | otherwise         = error ("got terminal "++(show (toktp,tokname))++" which was unexpected")
 
+countScope::Scop->Int
+countScope []		=0
+countScope ((_,(TE.Addr _)):bs)	=1+(countScope bs)
+countScope ((_,(TE.Imm _)):bs)		=0+(countScope bs)
+								
+currentAddress::SymTb->Int
+currentAddress []		=0
+currentAddress (s:ss)	=(countScope s)+(currentAddress ss)
+								
+toInt::Bool->Int
+toInt True	=1
+toInt False	=0
+
+eval::SymTb->TokenTree->Int
+eval mm (TokenLeaf (Number,s))		=read s::Int
+eval mm (TokenLeaf (BFalse,_))			=0
+eval mm (TokenLeaf (BTrue,_))			=1
+eval mm (TokenLeaf (Var,vn))			=v' where
+											v'=case (getAddr vn mm) of
+												TE.Addr a	->error "Tried to evaluate a variable"
+												TE.Imm i	->i
+eval mm (TokenNode (Plus,_) tl tr)		=(eval mm tl) + (eval mm tr)
+eval mm (TokenNode (Min,_) tl tr)		=(eval mm tl) - (eval mm tr)
+eval mm (TokenNode (Grammar.Mul,_) tl tr)		=(eval mm tl) * (eval mm tr)
+eval mm (TokenNode (Grammar.Div,_) tl tr)		=(eval mm tl) `div` (eval mm tr)
+eval mm (TokenNode (OpBool, "<=") tl tr)=toInt ((eval mm tl) <= (eval mm tr))
+eval mm (TokenNode (OpBool, ">=") tl tr)=toInt ((eval mm tl) >= (eval mm tr))
+eval mm (TokenNode (OpBool, "<") tl tr)	=toInt ((eval mm tl) < (eval mm tr))
+eval mm (TokenNode (OpBool, ">") tl tr)	=toInt ((eval mm tl) > (eval mm tr))
+eval mm (TokenNode (OpBool, "&&") tl tr)=toInt (((eval mm tl) + (eval mm tr)) ==2)
+eval mm (TokenNode (OpBool, "||") tl tr)=toInt (((eval mm tl) + (eval mm tr)) >=1)
+eval mm (TokenNode (OpBool, "==") tl tr)=toInt ((eval mm tl) == (eval mm tr))
+eval mm (TokenNode (OpBool, "!=") tl tr)=toInt ((eval mm tl) /= (eval mm tr))
+
+eval mm (TokenNode (Grammar.Not,_) tl _)		=(1-(eval mm tl))
+								
 cmpE :: SymTb -> TokenTree -> [TE.Assembly]
 cmpE st Nop                             = []
 cmpE st (TokenLeaf tok)                 = [ term2asm st tok regA, TE.Push regA]
@@ -131,12 +139,20 @@ cmpP nvar (st:sts) (TokenNode (Semicolon,_) tl@(TokenNode stmt subsl subsr) tr )
         (VarVar,"var")  -> 
             let
                 TokenLeaf (Var, vname)  = subsl
-                TokenLeaf (Number, n')  = subsr
-                n                       = read n' :: Int
+                instr					= cmpE (st:sts) subsr
                 st'                     = ((vname, (TE.Addr nvar)):st)
 
-            in  [TE.Store (TE.Imm n) nvar] ++ cmpP (nvar+1) (st':sts) tr
+            in  instr++[TE.Pop 4, TE.Store (TE.Addr 4) nvar] ++ cmpP (nvar+1) (st':sts) tr
 
+			
+        (ConstVar,"const")  -> 
+            let
+                TokenLeaf (Var, vname)  = subsl
+                n						= eval (st:sts) subsr
+                st'                     = ((vname, (TE.Imm n)):st)
+
+            in  [TE.Store (TE.Imm n) nvar] ++ cmpP (nvar+1) (st':sts) tr
+			
         (Assignment,"=")->
             let
                 TokenLeaf (Var, vname)  = subsl
