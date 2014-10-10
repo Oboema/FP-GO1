@@ -99,7 +99,7 @@ parse Stat (t@(Var,_):ts)		=(TokenNode tn (TokenLeaf t) tr,r) where
 	(tr, r2)	=parse NegExpr r1
 	(nt, r)		=consume Semicolon r2
 
-parse Stat (t@(While,_):ts)		=(TokenNode t tl tr, r) where
+parse Stat (t@(While,_):ts)		=(TokenNode t tl (TokenNode (Semicolon,";") tr Nop), r) where
 	(tl, r1)	=parse NegExpr ts
 	(tr, r)		=parse Stat r1
 	
@@ -138,7 +138,7 @@ parse Stat (t@(For,_):ts)		=
 	(trl, r5)	=parse NegExpr r4
 	(trr, r)	=parse Stat r5
 
-parse Stat (t@(If,_):ts)		=(TokenNode t tl (TokenNode tn trl trr), r) where
+parse Stat (t@(If,_):ts)		=(TokenNode t tl (TokenNode tn (TokenNode (Semicolon,";") trl Nop) (TokenNode (Semicolon,";") trr Nop)), r) where
 	(tl, r1)	=parse NegExpr ts
 	(tn, r2)	=consume Then r1
 	(trl, r3)	=parse Stat r2
