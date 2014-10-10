@@ -33,16 +33,6 @@ pop = TE.Pop r0
 type Scop   = [(String, TE.Value)]
 type SymTb  = [Scop]
 
-bool2num :: Token -> Token
-bool2num tok@(ttype, _) | ttype == BFalse   = (Number, "0")
-                        | ttype == BTrue    = (Number, "1")
-                        | otherwise         = tok
-
--- search and destroy bools and convert them to numbers
-pp :: TokenTree -> TokenTree
-pp (Nop)                = (Nop)
-pp (TokenLeaf leaf)     = tkl $ bool2num leaf
-pp (TokenNode n tl tr)  = (TokenNode n (pp tl) (pp tr))
 
 
 
@@ -54,9 +44,6 @@ inScop [] vname                     = Nothing
 inScop ((vname', addr):scs) vname   | vname == vname'   = Just addr
                                     | otherwise         = inScop scs vname
 
-									
-									
-
 getAddr :: String -> SymTb -> TE.Value
 getAddr vname []                        = error ("variable "++(show vname)++" not found")
 getAddr vname (st:sts)  = case (inScop st vname) of
@@ -67,16 +54,9 @@ getAddr vname (st:sts)  = case (inScop st vname) of
 term2asm :: SymTb -> Token -> Int -> TE.Assembly
 term2asm st (toktp, tokname) r  | toktp == Var      = TE.Load (getAddr tokname st ) r
                                 | toktp == Number   = TE.Load (TE.Imm (read tokname :: Int))  r
-                                | otherwise         = error ("got terminal "++(show (toktp,tokname))++" which was unexpected")
-
-countScope::Scop->Int
-countScope []		=0
-countScope ((_,(TE.Addr _)):bs)	=1+(countScope bs)
-countScope ((_,(TE.Imm _)):bs)		=0+(countScope bs)
-								
-currentAddress::SymTb->Int
-currentAddress []		=0
-currentAddress (s:ss)	=(countScope s)+(currentAddress ss)
+                                | toktp == BFalse   = TE.Load (TE.Imm 0 ) r
+                                | toktp == BTrue    = TE.Load (TE.Imm 1 ) r
+                                |otherwise         = error ("got terminal "++(show (toktp,tokname))++" which was unexpected")
 								
 toInt::Bool->Int
 toInt True	=1
@@ -92,8 +72,8 @@ eval mm (TokenLeaf (Var,vn))			=v' where
 												TE.Imm i	->i
 eval mm (TokenNode (Plus,_) tl tr)		=(eval mm tl) + (eval mm tr)
 eval mm (TokenNode (Min,_) tl tr)		=(eval mm tl) - (eval mm tr)
-eval mm (TokenNode (Grammar.Mul,_) tl tr)		=(eval mm tl) * (eval mm tr)
-eval mm (TokenNode (Grammar.Div,_) tl tr)		=(eval mm tl) `div` (eval mm tr)
+eval mm (TokenNode (Mul,_) tl tr)		=(eval mm tl) * (eval mm tr)
+eval mm (TokenNode (Div,_) tl tr)		=(eval mm tl) `div` (eval mm tr)
 eval mm (TokenNode (OpBool, "<=") tl tr)=toInt ((eval mm tl) <= (eval mm tr))
 eval mm (TokenNode (OpBool, ">=") tl tr)=toInt ((eval mm tl) >= (eval mm tr))
 eval mm (TokenNode (OpBool, "<") tl tr)	=toInt ((eval mm tl) < (eval mm tr))
@@ -180,20 +160,6 @@ cmpP nvar (st:sts) (TokenNode (Semicolon,_) tl@(TokenNode stmt subsl subsr) tr )
                 jumpOut     = [TE.Compute TE.Not regA regA regA, pop, TE.Jump TE.CR (1+(length (whileStat++jumpBack)))]
                 jumpBack    = [TE.Jump TE.UR (-(length(cond++jumpOut++whileStat)))]
             in cond ++ jumpOut ++ whileStat ++ jumpBack ++ cmpP nvar (st:sts) tr
-
--- hack for matching assignments it Then subtrees. 
--- Parser throws away parent Semicolons of Assignments in Then subtrees
--- which means they do not get matched by the above pattern.
--- there be dragons in the parser, so I thought this would save some time :)
-{-}
-cmpP nvar (st:sts) (TokenNode (Assignment, _) (TokenLeaf (Var, vname)) expr ) =
-    let varaddr = (addr2int (getAddr vname (st:sts)) ) 
-    in (cmpE (st:sts) expr) ++ [TE.Pop r4, TE.Store (TE.Addr r4) varaddr ]
-        
--- same with Bopen, sometimes it pops up without a Semicolon parent.                            ||should always be Nop but ah well
-cmpP nvar (st:sts) (TokenNode (BOpen, "{") subsl subsr )    =  (cmpP nvar ([]:st:sts) subsl) ++ cmpP nvar (st:sts) subsr
--}
-
 
 cmpP nvar st (Nop)  = []
 

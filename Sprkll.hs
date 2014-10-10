@@ -22,10 +22,10 @@ compileString a	|check		=instr
 optTree a	=do
 	p	<-readFile a
 	putStr $ show $ parseProgram $ tokenize p
-{-
+
 optEval::FilePath->IO ()
 optEval a	=putStr $ show $ eval [[]] $ parseExpression $ tokenize a
--}
+
 
 optRun a=do
 	p	<-readFile a
@@ -45,7 +45,7 @@ options::[([Char],([Char],[Char]->IO ()))]
 options=[("-r",("run the program in the file",optRun)),
 	("-a",("show the assembly of the program in file",optAssemble)),
 	("-t",("show the tree of the program in the file",optTree)),
-	--("-e",("evaluate the expression and show the result",optEval)),
+	("-e",("evaluate the expression and show the result",optEval)),
 	("-h",("show the help",optHelp))]
 
 
