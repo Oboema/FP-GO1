@@ -4,7 +4,6 @@ module Sprockell where
 
 import Debug.Trace
 import TypesEtc
-import Prelude
 
 {-------------------------------------------------------------
 | SPROCKELL: Simple PROCessor in hasKELL :-)
