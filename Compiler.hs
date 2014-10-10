@@ -151,7 +151,7 @@ cmpP nvar (st:sts) (TokenNode (Semicolon,_) tl@(TokenNode stmt subsl subsr) tr )
                 n						= eval (st:sts) subsr
                 st'                     = ((vname, (TE.Imm n)):st)
 
-            in  [TE.Store (TE.Imm n) nvar] ++ cmpP (nvar+1) (st':sts) tr
+            in  cmpP (nvar+1) (st':sts) tr
 			
         (Assignment,"=")->
             let
